@@ -1,0 +1,104 @@
+{
+  "cases": [
+    {
+      "name": "key sorting and integers",
+      "input": {
+        "a": 1,
+        "b": 2,
+        "c": 3
+      },
+      "canonical": "{\"a\":1,\"b\":2,\"c\":3}"
+    },
+    {
+      "name": "nested and array",
+      "input": {
+        "a": {
+          "x": 2,
+          "y": 1
+        },
+        "z": [
+          3,
+          2,
+          1
+        ]
+      },
+      "canonical": "{\"a\":{\"x\":2,\"y\":1},\"z\":[3,2,1]}"
+    },
+    {
+      "name": "unicode raw, no escape of <>&",
+      "input": {
+        "name": "客厅 <TV> & more"
+      },
+      "canonical": "{\"name\":\"客厅 <TV> & more\"}"
+    },
+    {
+      "name": "control char escaping",
+      "input": {
+        "s": "tab\tnewline\n"
+      },
+      "canonical": "{\"s\":\"tab\\tnewline\\n\"}"
+    },
+    {
+      "name": "status response",
+      "input": {
+        "id": "AAECAwQFBgcICQoLDA0ODw",
+        "name": "Living Room TV",
+        "app": "slothclash",
+        "ver": 1,
+        "power": "on",
+        "capabilities": [
+          "status",
+          "power",
+          "subscription",
+          "rename"
+        ]
+      },
+      "canonical": "{\"app\":\"slothclash\",\"capabilities\":[\"status\",\"power\",\"subscription\",\"rename\"],\"id\":\"AAECAwQFBgcICQoLDA0ODw\",\"name\":\"Living Room TV\",\"power\":\"on\",\"ver\":1}"
+    },
+    {
+      "name": "power response",
+      "input": {
+        "ok": true,
+        "power": "on"
+      },
+      "canonical": "{\"ok\":true,\"power\":\"on\"}"
+    },
+    {
+      "name": "rename response",
+      "input": {
+        "ok": true,
+        "name": "Bedroom TV"
+      },
+      "canonical": "{\"name\":\"Bedroom TV\",\"ok\":true}"
+    },
+    {
+      "name": "ok response",
+      "input": {
+        "ok": true
+      },
+      "canonical": "{\"ok\":true}"
+    },
+    {
+      "name": "error envelope",
+      "input": {
+        "error": {
+          "code": "unauthorized",
+          "message": "invalid or revoked token"
+        }
+      },
+      "canonical": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"invalid or revoked token\"}}"
+    },
+    {
+      "name": "pair request",
+      "input": {
+        "pin": "012345",
+        "device": {
+          "id": "dev-1",
+          "name": "My Phone"
+        }
+      },
+      "canonical": "{\"device\":{\"id\":\"dev-1\",\"name\":\"My Phone\"},\"pin\":\"012345\"}"
+    }
+  ],
+  "note": "Parse input as JSON, canonicalize (PROTOCOL.md §3.4), result must equal canonical byte-for-byte."
+}

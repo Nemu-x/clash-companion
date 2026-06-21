@@ -1,0 +1,15 @@
+{
+  "deviceId": {
+    "encoded": "AAECAwQFBgcICQoLDA0ODw",
+    "rawHex": "000102030405060708090a0b0c0d0e0f"
+  },
+  "note": "base64url(no-pad) per PROTOCOL.md §3; tokenHash = lowercasehex(sha256(token)) §7.2",
+  "token": {
+    "encoded": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+    "rawHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+  },
+  "tokenHash": {
+    "sha256": "03e33a61ec2cf5b23146f1cc41d92288ad356446a16dd26bd3fd6de0c4e5443c",
+    "token": "sample-bearer-token-value-for-hashing"
+  }
+}

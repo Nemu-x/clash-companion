@@ -1,0 +1,48 @@
+{
+  "cases": [
+    {
+      "name": "basic with spaces in name",
+      "fields": {
+        "ip": "192.168.1.50",
+        "port": 8443,
+        "id": "AAECAwQFBgcICQoLDA0ODw",
+        "name": "Living Room TV",
+        "app": "slothclash",
+        "fp": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "token": "c2FtcGxlLXRva2Vu"
+      },
+      "uri": "clashctl-pair://192.168.1.50:8443?id=AAECAwQFBgcICQoLDA0ODw&name=Living%20Room%20TV&app=slothclash&fp=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&token=c2FtcGxlLXRva2Vu",
+      "decodes": true
+    },
+    {
+      "name": "unicode name and IPv6 host",
+      "fields": {
+        "ip": "fe80::1",
+        "port": 443,
+        "id": "ZGV2aWNlLWlkLXR3bw",
+        "name": "客厅 TV™",
+        "app": "clashfest",
+        "fp": "abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd0",
+        "token": "dG9rZW4yLXZhbHVl"
+      },
+      "uri": "clashctl-pair://[fe80::1]:443?id=ZGV2aWNlLWlkLXR3bw&name=%E5%AE%A2%E5%8E%85%20TV%E2%84%A2&app=clashfest&fp=abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd0&token=dG9rZW4yLXZhbHVl",
+      "decodes": true
+    },
+    {
+      "name": "decode tolerates reordered params",
+      "uri": "clashctl-pair://10.0.0.2:8443?token=dG9r&fp=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&app=x&name=N&id=ID1",
+      "decodes": true
+    },
+    {
+      "name": "reject missing token",
+      "uri": "clashctl-pair://10.0.0.2:8443?id=ID1&fp=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "decodes": false
+    },
+    {
+      "name": "reject missing port",
+      "uri": "clashctl-pair://10.0.0.2?id=ID1&fp=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&token=t",
+      "decodes": false
+    }
+  ],
+  "note": "Encode produces uri exactly; Decode of uri must reproduce fields. Order id,name,app,fp,token (PROTOCOL.md §6.1)."
+}

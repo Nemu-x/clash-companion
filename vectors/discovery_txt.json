@@ -1,0 +1,17 @@
+{
+  "encoded": [
+    "app=slothclash",
+    "id=AAECAwQFBgcICQoLDA0ODw",
+    "name=Living Room TV",
+    "ver=1",
+    "fp=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  ],
+  "fields": {
+    "App": "slothclash",
+    "ID": "AAECAwQFBgcICQoLDA0ODw",
+    "Name": "Living Room TV",
+    "Ver": 1,
+    "FP": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  },
+  "note": "TXT keys order app,id,name,ver,fp (PROTOCOL.md §4.3); decode tolerates any order."
+}

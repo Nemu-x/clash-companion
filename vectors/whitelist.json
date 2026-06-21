@@ -1,0 +1,85 @@
+{
+  "cases": [
+    {
+      "method": "GET",
+      "path": "/configs",
+      "allowed": true
+    },
+    {
+      "method": "PUT",
+      "path": "/configs",
+      "allowed": true
+    },
+    {
+      "method": "GET",
+      "path": "/proxies",
+      "allowed": true
+    },
+    {
+      "method": "GET",
+      "path": "/proxies/Proxy",
+      "allowed": true
+    },
+    {
+      "method": "PUT",
+      "path": "/proxies/GroupA",
+      "allowed": true
+    },
+    {
+      "method": "GET",
+      "path": "/group",
+      "allowed": true
+    },
+    {
+      "method": "PUT",
+      "path": "/group/Auto",
+      "allowed": true
+    },
+    {
+      "method": "GET",
+      "path": "/traffic",
+      "allowed": true
+    },
+    {
+      "method": "GET",
+      "path": "/connections",
+      "allowed": true
+    },
+    {
+      "method": "GET",
+      "path": "/version",
+      "allowed": true
+    },
+    {
+      "method": "GET",
+      "path": "/logs",
+      "allowed": true
+    },
+    {
+      "method": "POST",
+      "path": "/configs",
+      "allowed": false
+    },
+    {
+      "method": "GET",
+      "path": "/upgrade",
+      "allowed": false
+    },
+    {
+      "method": "PUT",
+      "path": "/upgrade",
+      "allowed": false
+    },
+    {
+      "method": "GET",
+      "path": "/configs/../secret",
+      "allowed": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/connections",
+      "allowed": false
+    }
+  ],
+  "note": "Allowed(method, corePath) per PROTOCOL.md §9.1 whitelist; everything else forbidden."
+}
