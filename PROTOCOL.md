@@ -40,6 +40,7 @@ The key words **MUST**, **MUST NOT**, **SHALL**, **SHALL NOT**, **SHOULD**, **MA
    │ pinned-TLS client │ ◄──────────────►  │ ┌──────────────────────────────┐ │
    │ bearer token      │   HTTPS + Bearer  │ │ clashctl GATEWAY (LAN)        │ │
    └───────────────────┘ ◄══════════════►  │ │  /v1/status power sub rename  │ │
+                                           │ │  remote buttons (caps, §8.6)  │ │
                                            │ │  /v1/core/*  (whitelist, P2)  │ │
                                            │ └──────────────┬───────────────┘ │
                                            │   app Hooks    │ localhost only   │
@@ -52,8 +53,10 @@ The key words **MUST**, **MUST NOT**, **SHALL**, **SHALL NOT**, **SHOULD**, **MA
 
 The gateway does two kinds of work:
 
-1. **App-only operations** the core cannot perform — VPN/tunnel on/off, subscription import,
-   rename, status — fulfilled by the consumer's **Hooks**.
+1. **App operations**, fulfilled by the consumer's **Hooks**: what the core cannot do at all
+   (VPN/tunnel on/off, subscription import, rename, status), and the **remote buttons** (§8.6):
+   node selection, mode, profiles, settings and so on. Those change state the consumer app owns, so
+   they MUST run through the app's own code path, exactly as if pressed on the agent's screen.
 2. **Whitelist forwarding** (Phase 2) of a fixed set of native Clash-API calls to the **localhost**
    core, so controllers speak mihomo's own dialect.
 
@@ -65,7 +68,7 @@ LAN only through the gateway's `/v1/core/*` whitelist (§9).
 | Phase | Scope |
 |-------|-------|
 | **P1** | discovery · QR/paste/PIN pairing (TLS + token) · `/v1/status` · `/v1/power` · `/v1/subscription` · `/v1/rename` · reconnect-by-deviceId |
-| **P2** | `ANY /v1/core/*` whitelist forward · `WS /v1/events` (live status/traffic) |
+| **P2** | remote buttons (§8.6–§8.19) · `ANY /v1/core/*` whitelist forward · `GET /v1/events` (live updates, SSE) |
 | **P3** | cross-app control · optional agent-served web UI |
 
 P2/P3 endpoints are specified here but gated behind capability advertisement (§8.3); a P1-only
@@ -86,7 +89,8 @@ LAN surface.
 - **Per-device bearer token.** Every request carries `Authorization: Bearer <token>`. Tokens are
   per paired controller and **revocable** by un-pairing (§3.2, §7).
 - **Strict whitelist.** Only the endpoints in this document are served; only the core calls in §9
-  are forwarded. `/upgrade`, arbitrary config file paths, and unlisted methods are always refused.
+  are forwarded. `/upgrade`, loading or patching core configuration, and unlisted methods are
+  always refused.
 - **Confirm-on-agent-screen.** An optional first-connect confirmation; **mandatory** for the
   PIN-assisted pairing flow (§6.4).
 - **Secrets at rest.** The agent stores only `SHA-256(token)`, never the raw token (§7.2).
@@ -108,7 +112,7 @@ pin them.
 
 - Generation: 16 cryptographically-random bytes.
 - Encoding: `base64url(no-pad)` → **22 characters**.
-- Stable for the device's lifetime; unchanged by rename (§8.7) or IP change (§4.4).
+- Stable for the device's lifetime; unchanged by rename (§8.5) or IP change (§4.4).
 
 ### 3.2 `token`
 
@@ -216,8 +220,10 @@ the **pairing-time** `fp` is authoritative.
 ### 5.4 Request/response envelope
 
 - All bodies are UTF-8 JSON in canonical form (§3.4).
-- **App-only** success responses (§8) return `200` with a body containing `"ok": true` plus any
-  result fields.
+- **App** success responses (§8) return `200`. A `POST` response contains `"ok": true` plus any
+  result fields; a `GET` response is the resource itself, without `ok`.
+- Lists are always encoded as arrays (`[]` when empty), never `null`. Fields marked *optional*
+  are omitted when empty; all others are always present.
 - **Forwarded core** success responses (§9) return the core's status/body verbatim after the edge
   checks pass.
 - **Errors** use the uniform envelope:
@@ -239,6 +245,9 @@ the **pairing-time** `fp` is authoritative.
 | `pin_rate_limited` | 429 | PIN-assisted pairing: too many attempts. |
 | `core_unavailable` | 502 | The localhost core could not be reached. |
 | `internal` | 500 | Unexpected agent error. |
+
+A consumer hook reports a missing group/node/profile/etc. as `not_found` and a value it rejects
+as `bad_request`; any other hook failure is reported as `core_unavailable`.
 
 ---
 
@@ -311,13 +320,24 @@ bearer token and compares.
 ### 7.3 Revocation (un-pair)
 
 Un-pairing a controller MUST delete its entry. The next request bearing its token MUST be rejected
-with `unauthorized`. Other controllers' tokens MUST continue to work.
+with `unauthorized`. Other controllers' tokens MUST continue to work. Any open event stream (§9.2)
+of that controller MUST be closed.
+
+### 7.4 `POST /v1/unpair` — self-revocation (capability `unpair`)
+
+A controller that "forgets" an agent MUST call `POST /v1/unpair` (body `{}`) before deleting its
+stored token, so the token does not stay valid on the agent. The agent revokes the **calling**
+controller's pairing exactly as in §7.3 and responds `{"ok":true}`. The request requires a valid
+bearer token but MUST NOT require first-connect confirmation (§6.5): giving up control never needs
+approval. If the agent is unreachable, the controller deletes its token anyway and the user can
+un-pair on the agent screen.
 
 ---
 
-## 8. v1 endpoints (P1, app-only)
+## 8. v1 endpoints (app operations)
 
-All endpoints are under `/v1`, require a valid bearer token (§5.2), and use canonical JSON (§3.4).
+§8.1–§8.5 are the P1 core every agent serves; §8.6–§8.19 are optional, capability-gated remote
+buttons. All endpoints are under `/v1`, require a valid bearer token (§5.2), and use canonical JSON (§3.4).
 
 ### 8.1 `GET /v1/status`
 
@@ -337,6 +357,22 @@ Response (example, canonical):
 | `ver` | integer | Protocol major version. |
 | `power` | string | `on` or `off` — current tunnel state, sourced from the consumer hook. |
 | `capabilities` | string[] | Supported capability tags (§8.3). |
+| `summary` | object | *Optional* at-a-glance state, so a controller's home screen needs one call. |
+
+`summary` fields are each *optional* (omitted when unknown); the whole object is omitted when
+empty. A failure to compute it MUST NOT fail the status call.
+
+| `summary` field | Meaning |
+|-----------------|---------|
+| `mode` | Tunnel mode (§8.10). |
+| `profile` | Active profile display name. |
+| `proxy` | Node currently carrying traffic, as the app shows it. |
+| `appVersion` | Consumer app version. |
+| `coreVersion` | Core version, e.g. `v1.19.32`. |
+
+```json
+{"app":"clashfest","capabilities":["status","power","subscription","rename","unpair","proxies","select","mode","events"],"id":"<deviceId>","name":"Living Room TV","power":"on","summary":{"appVersion":"2.4.0","coreVersion":"v1.19.32","mode":"rule","profile":"Main","proxy":"🇯🇵 Japan"},"ver":1}
+```
 
 ### 8.2 `POST /v1/power`
 
@@ -347,9 +383,31 @@ Response: `{"ok":true,"power":"on"}` (the resulting state).
 
 ### 8.3 Capability advertisement
 
-`capabilities` enumerates the optional features the agent implements, drawn from:
-`status`, `power`, `subscription`, `rename` (P1), `core` (`/v1/core/*`), `events`
-(`WS /v1/events`) (P2). Controllers MUST hide features whose capability is absent.
+`capabilities` enumerates the features the agent implements, in this order:
+
+| Capability | Endpoints | § |
+|------------|-----------|---|
+| `status` · `power` · `subscription` · `rename` | P1, always present | 8.1–8.5 |
+| `unpair` | `POST /v1/unpair` | 7.4 |
+| `proxies` | `GET /v1/proxies` | 8.7 |
+| `select` | `POST /v1/proxies/select` | 8.8 |
+| `unfix` | `POST /v1/proxies/unfix` | 8.8 |
+| `delay` | `POST /v1/proxies/delay` | 8.9 |
+| `mode` | `GET /v1/mode` · `POST /v1/mode` | 8.10 |
+| `profiles` | `GET /v1/profiles` · `POST /v1/profiles/select` | 8.11 |
+| `profile_update` | `POST /v1/profiles/update` | 8.12 |
+| `profile_delete` | `POST /v1/profiles/delete` | 8.13 |
+| `providers` | `GET /v1/providers` · `POST /v1/providers/update` · `POST /v1/providers/healthcheck` | 8.14 |
+| `connections` | `GET /v1/connections` · `POST /v1/connections/close` | 8.15 |
+| `traffic` | `GET /v1/traffic` | 8.16 |
+| `logs` | `GET /v1/logs` | 8.17 |
+| `settings` | `GET /v1/settings` · `POST /v1/settings` | 8.18 |
+| `actions` | `GET /v1/actions` · `POST /v1/actions` | 8.19 |
+| `core` | `ANY /v1/core/*` | 9.1 |
+| `events` | `GET /v1/events` (server-sent events) | 9.2 |
+
+Controllers MUST hide features whose capability is absent and MUST ignore capability tags they do
+not know.
 
 ### 8.4 `POST /v1/subscription`
 
@@ -367,6 +425,159 @@ leaves `deviceId`, `token`, and `fp` unchanged. Empty `name` → `bad_request`.
 
 Response: `{"name":"Bedroom TV","ok":true}`.
 
+### 8.6 Remote buttons — common rules
+
+The endpoints in §8.7–§8.19 let a controller press the agent app's own buttons. Each belongs to a
+capability (§8.3) and is OPTIONAL: a consumer implements the ones its app has.
+
+- An agent MUST advertise a capability if and only if it serves its endpoints.
+- A request to an endpoint whose capability is not advertised MUST be answered with `not_found`
+  **after** bearer authentication (§5.2), without side effects.
+- Every state-changing button MUST apply the change through the same code path as the equivalent
+  on-device control, so it is persisted and reflected in the agent's own UI (e.g. a selected node
+  survives a tunnel restart). Writing to the core behind the app's back is not conformant.
+- The gateway validates the request shapes below before invoking any hook; violations are
+  `bad_request`. Unknown group/node/profile/provider/connection/setting/action → `not_found`.
+- Times are integers: `updatedAt`/`expire` in unix **seconds** (0 = unknown/never); connection
+  `start` and log `time` in unix **milliseconds**.
+
+### 8.7 `GET /v1/proxies` (capability `proxies`)
+
+Returns policy groups in display order, as the agent app presents them (an app MAY omit groups it
+hides).
+
+```json
+{"groups":[{"fixed":"","name":"Proxy","nodes":[{"delay":87,"name":"Auto","type":"URLTest"},{"delay":0,"name":"DIRECT","type":"Direct"}],"now":"Auto","selectable":true,"type":"Selector"}]}
+```
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `name` | string | Group name. |
+| `type` | string | Core group type, passed through (`Selector`, `URLTest`, `Fallback`, `LoadBalance`, …). |
+| `now` | string | Node currently in use (`""` if none). |
+| `fixed` | string | Node pinned in an automatic group (`""` if none). |
+| `selectable` | bool | Whether `select` (§8.8) may target this group. |
+| `nodes[].name` / `.type` | string | Member name and core type (a member may itself be a group). |
+| `nodes[].delay` | integer | Last measured delay in ms; `0` = unknown or failed. |
+
+### 8.8 `POST /v1/proxies/select` (`select`) · `POST /v1/proxies/unfix` (`unfix`)
+
+- **select** body `{"group":"<group>","node":"<node>"}`, both REQUIRED. Selects `node` in `group`.
+  For automatic groups (`URLTest`/`Fallback`) this pins the node.
+- **unfix** body `{"group":"<group>"}`, REQUIRED. Clears the pinned node of an automatic group.
+
+Response (both): `{"group":"Proxy","now":"<node now in use>","ok":true}`.
+
+### 8.9 `POST /v1/proxies/delay` (capability `delay`)
+
+Body `{"group":"<group>","node":"<node>","url":"<test url>","timeout":<ms>}`. `group` is REQUIRED;
+`node`, `url` and `timeout` are *optional*. Without `node` the whole group is tested. `url` MUST be
+an absolute `http`/`https` URL; when absent the agent's default test URL is used. `timeout` is
+`0`/absent (= 5000) or within **100–30000** ms.
+
+Response: `{"delays":[{"delay":64,"name":"HK-01"},{"delay":0,"name":"JP-01"}],"ok":true}`, where
+`delay` `0` means the node failed or timed out.
+
+### 8.10 `GET /v1/mode` · `POST /v1/mode` (capability `mode`)
+
+`GET` → `{"mode":"rule","modes":["rule","global","direct"]}` (`modes` = values the agent accepts).
+`POST` body `{"mode":"rule"|"global"|"direct"}` (lowercase; anything else → `bad_request`) →
+`{"mode":"global","ok":true}`.
+
+### 8.11 `GET /v1/profiles` · `POST /v1/profiles/select` (capability `profiles`)
+
+`GET` →
+
+```json
+{"active":"p-1","profiles":[{"id":"p-1","name":"Main","type":"remote","updatedAt":1792540800,"usage":{"download":52428800,"expire":1798761600,"total":107374182400,"upload":1048576}}]}
+```
+
+`id` is an agent-chosen opaque string; `type` is `remote` (has an update URL) or `local`;
+`usage` is *optional* subscription info (bytes; `expire` unix seconds, 0 = never). `active` is
+`""` when no profile is active.
+
+`POST /v1/profiles/select` body `{"id":"<id>"}` (REQUIRED) activates a profile →
+`{"active":"<id>","ok":true}`.
+
+### 8.12 `POST /v1/profiles/update` (capability `profile_update`)
+
+Body `{"id":"<id>"}` refreshes one remote profile from its URL; `{}` refreshes all remote profiles.
+Response `{"ok":true}`.
+
+### 8.13 `POST /v1/profiles/delete` (capability `profile_delete`)
+
+Body `{"id":"<id>"}` (REQUIRED). The agent MAY refuse to delete the active profile with
+`bad_request`. Response `{"ok":true}`.
+
+### 8.14 Providers (capability `providers`)
+
+`GET /v1/providers` →
+
+```json
+{"providers":[{"count":42,"kind":"proxy","name":"sub1","updatedAt":1792540800,"vehicle":"http"},{"count":120345,"kind":"rule","name":"ads","updatedAt":0,"vehicle":"file"}]}
+```
+
+`kind` is `proxy` or `rule`; `vehicle` is `http`, `file` or `inline`; `count` is the number of
+proxies or rules; `usage` (§8.11) is *optional*.
+
+- `POST /v1/providers/update` body `{"kind":"proxy"|"rule","name":"<name>"}` refreshes a provider.
+- `POST /v1/providers/healthcheck` body `{"kind":"proxy","name":"<name>"}` health-checks a proxy
+  provider; `kind` other than `proxy` → `bad_request`.
+
+Both respond `{"ok":true}`.
+
+### 8.15 Connections (capability `connections`)
+
+`GET /v1/connections` →
+
+```json
+{"connections":[{"chains":["HK-01","Proxy"],"download":1048576,"host":"www.youtube.com:443","id":"c1","network":"tcp","process":"","rule":"DomainSuffix(youtube.com)","start":1792540800123,"upload":2048}],"downloadTotal":734003200,"uploadTotal":1048576}
+```
+
+`host` is `host:port` (or `ip:port`); `process` is `""` when unknown; `chains` lists the outbound
+chain in core order (last hop first).
+
+`POST /v1/connections/close` body `{"id":"<id>"}` closes one connection; `{}` closes all →
+`{"closed":17,"ok":true}`.
+
+### 8.16 `GET /v1/traffic` (capability `traffic`)
+
+A snapshot: `{"down":3276800,"downTotal":734003200,"up":12800,"upTotal":1048576}`, with current
+rates in bytes/s and totals in bytes. Controllers poll it (RECOMMENDED ≥ 1 s apart); live
+streaming is `events` (§9.2).
+
+### 8.17 `GET /v1/logs` (capability `logs`)
+
+Query `level` (*optional*: `error`, `warning`, `info` or `debug`, meaning that level and more
+severe) and `limit` (*optional*, 1–1000, default 100). Returns up to `limit` most recent lines,
+oldest first: `{"lines":[{"level":"warning","msg":"…","time":1792540800123}]}`.
+
+### 8.18 Settings (capability `settings`)
+
+`GET /v1/settings` →
+
+```json
+{"settings":[{"key":"tun","type":"bool","value":true},{"key":"log_level","options":["silent","error","warning","info","debug"],"type":"enum","value":"info"},{"key":"bypass_lan_apps","label":"Bypass LAN apps","type":"bool","value":false}]}
+```
+
+`type` is `bool` (`value` is a JSON boolean) or `enum` (`value` is one of `options`). `label`
+(*optional*) is a display name for consumer-defined keys; `options` is present for `enum` only.
+Well-known keys, with fixed meaning: `tun`, `system_proxy`, `allow_lan`, `ipv6`, `sniffing` (bool),
+`log_level` (enum). Consumers MAY add their own keys.
+
+`POST /v1/settings` body `{"key":"<key>","value":<bool|string>}`. Unknown key → `not_found`; a
+value of the wrong type or outside `options` → `bad_request`. Response
+`{"ok":true,"setting":{…the setting's new state…}}`.
+
+### 8.19 Actions (capability `actions`)
+
+`GET /v1/actions` → `{"actions":[{"id":"flush_dns"},{"id":"clear_cache","label":"Clear cache"}]}`.
+Well-known ids: `flush_dns`, `flush_fakeip`, `update_geo`, `restart_core`, `healthcheck_all`;
+`label` (*optional*) names consumer-defined ones.
+
+`POST /v1/actions` body `{"action":"<id>"}` runs one; an id not listed → `not_found`. Response
+`{"ok":true}`.
+
 ---
 
 ## 9. Phase 2 — core forwarding & events
@@ -378,32 +589,73 @@ Forwards only the **whitelisted** native Clash-API calls to the localhost core
 enforces bearer auth (§5.2) and the whitelist, then relays the core's status, body, and safe
 headers verbatim (§5.4).
 
-**Whitelist (method + path):**
+**Whitelist (method + path).** Every entry exists in mihomo's external-controller.
 
 | Method | Core path | Purpose |
 |--------|-----------|---------|
-| `GET` | `/configs` | Read current config. |
-| `PUT` | `/configs` | Apply a config (`{payload}`). |
-| `GET` | `/proxies` | List proxies. |
-| `GET` | `/proxies/{name}` | Read one proxy. |
-| `PUT` | `/proxies/{name}` | Select a node within a group. |
-| `GET` | `/group` | List groups. |
-| `GET` | `/group/{name}` | Read one group. |
-| `PUT` | `/group/{name}` | Select within a group. |
-| `GET` | `/traffic` | Traffic stream/snapshot. |
-| `GET` | `/connections` | Active connections. |
-| `GET` | `/version` | Core version. |
-| `GET` | `/logs` | Log stream. |
+| `GET` | `/version` · `/configs` · `/memory` · `/rules` | Read core version, running config, memory, rules. |
+| `GET` | `/traffic` · `/logs` · `/connections` | Traffic, log and connection streams/snapshots. |
+| `GET` | `/proxies` · `/proxies/{name}` | List proxies and groups / read one. |
+| `PUT` | `/proxies/{group}` | Select a node in a group (`{"name":"<node>"}`). |
+| `DELETE` | `/proxies/{group}` | Clear the pinned node of an automatic group. |
+| `GET` | `/proxies/{name}/delay` | Delay-test one proxy (`?url=&timeout=`). |
+| `GET` | `/group` · `/group/{name}` | List groups / read one. |
+| `GET` | `/group/{name}/delay` | Delay-test a whole group. |
+| `GET` | `/providers/proxies` · `/providers/proxies/{name}` | Proxy providers. |
+| `PUT` | `/providers/proxies/{name}` | Update a proxy provider. |
+| `GET` | `/providers/proxies/{name}/healthcheck` | Health-check a proxy provider. |
+| `GET` | `/providers/rules` | Rule providers. |
+| `PUT` | `/providers/rules/{name}` | Update a rule provider. |
+| `DELETE` | `/connections` · `/connections/{id}` | Close all / one connection. |
 
-Anything not in this table — notably `/upgrade`, arbitrary file paths, and unlisted methods — MUST
-be refused with `forbidden` **without** contacting the core.
+A `{…}` segment matches exactly one non-empty path segment. Anything not in this table MUST be
+refused with `forbidden` **without** contacting the core, notably:
 
-### 9.2 `WS /v1/events` (capability `events`)
+- `PUT /configs` and `PATCH /configs`: loading or patching configuration could rebind
+  `external-controller` onto the LAN without a secret and bypass the gateway entirely. Mode and
+  settings changes go through `mode` (§8.10) and `settings` (§8.18) instead.
+- `/upgrade*`, `/restart`, `/storage/*`, `/cache/*`, `/debug/*`, `/configs/geo`, and every
+  unlisted method.
 
-A WebSocket over the same pinned-TLS, bearer-authorized channel streaming live status and traffic
-frames. Authorization MUST be enforced at the upgrade handshake; an upgrade without a valid token
-MUST be refused before any frame is sent. Frame payloads relay the core's native event JSON to
-preserve the dialect (see `design.md` open question).
+Selection is `PUT /proxies/{group}`; mihomo has no `PUT /group/{name}`.
+
+**Read-only mode.** Writes forwarded here reach the core behind the app's back (§8.6). An agent
+whose app owns that state (selected node, providers) SHOULD run the forward **read-only**, which
+relays only the whitelisted `GET` calls and refuses everything else with `forbidden`.
+
+Streaming responses (`/traffic`, `/logs`, `/connections`, and WebSocket upgrades of them) MUST be
+relayed without buffering.
+
+### 9.2 `GET /v1/events` (capability `events`)
+
+A [server-sent events](https://html.spec.whatwg.org/multipage/server-sent-events.html) stream over
+the same pinned-TLS, bearer-authorized channel, so controllers update live instead of polling: if
+one controller (or the user on the agent screen) changes something, every other controller sees it.
+
+- Request: `GET /v1/events` with `Authorization: Bearer <token>`. Auth (and validation) errors are
+  returned as normal JSON errors **before** the stream starts; no event is sent without a valid
+  token.
+- Query `topics` (*optional*, comma-separated): `traffic`, `logs`. Unknown topics are ignored.
+  `level` (*optional*, with `logs`): `error`, `warning`, `info` or `debug`, as in §8.17; any other
+  value → `bad_request`.
+- Response: `200`, `Content-Type: text/event-stream`. Each event is exactly
+  `event: <type>\ndata: <canonical JSON>\n\n` (canonical JSON never contains a raw newline). Lines
+  starting with `:` are heartbeats (sent at least every 30 s) and MUST be ignored.
+
+| `event` | `data` | When |
+|---------|--------|------|
+| `status` | the §8.1 status object | first event of every stream, and whenever power, name or summary changes |
+| `changed` | `{"resource":"<name>"}` | a resource changed: refetch its `GET` endpoint |
+| `traffic` | the §8.16 traffic object | about once a second, topic `traffic`, if `traffic` is advertised |
+| `log` | one §8.17 log line | topic `logs`, filtered by `level` |
+
+`resource` is one of `proxies`, `mode`, `profiles`, `providers`, `connections`, `settings`
+(the matching `GET /v1/…`). Controllers MUST ignore unknown event types and resources.
+
+The agent MUST emit these for changes made through the gateway **and** for the same changes made on
+the device itself. Events are not replayed: on reconnect a controller refetches what it shows.
+An agent MAY close a stream whose reader falls behind; it MUST close streams of a controller whose
+pairing is revoked (§7.3, §7.4).
 
 ---
 
@@ -422,9 +674,9 @@ preserve the dialect (see `design.md` open question).
 
 An implementation is conforming if it:
 
-1. Implements all P1 endpoints (§8) and the discovery (§4), pairing (§6), and transport (§5) rules.
+1. Implements all P1 endpoints (§8.1–§8.5) and the discovery (§4), pairing (§6), and transport (§5) rules.
 2. Produces and accepts the exact byte encodings of §3 and passes every applicable vector in
-   [`vectors/`](vectors/).
+   [`vectors/`](vectors/), including `control.json` for each remote button it advertises.
 3. Enforces the security requirements of §2 (default-off, pinning, bearer auth, whitelist).
 
 P2/P3 features are conformant when advertised via capabilities (§8.3) and matching their sections.

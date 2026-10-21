@@ -21,15 +21,18 @@ type Config struct {
 	Name      string            // initial display name
 	Identity  *pairing.Identity // pinned TLS identity (PROTOCOL.md §5.1)
 	Store     *pairing.Store    // pairing store
-	Hooks     Hooks             // consumer platform hooks (required)
+	Hooks     Hooks             // consumer platform hooks (required); may also implement remote-control hooks
 	Confirmer Confirmer         // optional first-connect confirmation (PROTOCOL.md §6.5)
 	PIN       *PINManager       // optional; enables POST /v1/pair (PROTOCOL.md §6.4)
 	Forwarder http.Handler      // optional; mounts /v1/core/* (P2, PROTOCOL.md §9.1)
-	Events    http.Handler      // optional; mounts WS /v1/events (P2, PROTOCOL.md §9.2)
 
 	// RequireConfirmFirstConnect gates QR/paste pairings on agent-screen confirmation.
 	// The PIN flow always confirms regardless of this setting.
 	RequireConfirmFirstConnect bool
+
+	// DisableCapabilities turns off remote-control capabilities the hooks implement but the
+	// consumer does not want to expose (e.g. ones inherited by embedding corehooks.Core).
+	DisableCapabilities []string
 
 	// OnRename, if set, is called after a successful rename so the consumer can
 	// re-announce over mDNS (PROTOCOL.md §8.5).
@@ -38,9 +41,11 @@ type Config struct {
 
 // Agent is a clashctl gateway.
 type Agent struct {
-	cfg  Config
-	mu   sync.RWMutex
-	name string
+	cfg    Config
+	remote []string // advertised remote-control capabilities (PROTOCOL.md §8.3)
+	events *hub     // GET /v1/events subscribers (PROTOCOL.md §9.2)
+	mu     sync.RWMutex
+	name   string
 }
 
 // New validates cfg and returns an Agent.
@@ -48,19 +53,22 @@ func New(cfg Config) (*Agent, error) {
 	if cfg.App == "" || cfg.DeviceID == "" || cfg.Identity == nil || cfg.Store == nil || cfg.Hooks == nil {
 		return nil, errors.New("agent: App, DeviceID, Identity, Store and Hooks are required")
 	}
-	return &Agent{cfg: cfg, name: cfg.Name}, nil
+	return &Agent{
+		cfg:    cfg,
+		remote: detectRemoteCaps(cfg.Hooks, cfg.DisableCapabilities),
+		events: newHub(),
+		name:   cfg.Name,
+	}, nil
 }
 
 // Capabilities returns the advertised capability set (PROTOCOL.md §8.3).
 func (a *Agent) Capabilities() []string {
-	caps := []string{protocol.CapStatus, protocol.CapPower, protocol.CapSubscription, protocol.CapRename}
+	caps := []string{protocol.CapStatus, protocol.CapPower, protocol.CapSubscription, protocol.CapRename, protocol.CapUnpair}
+	caps = append(caps, a.remote...)
 	if a.cfg.Forwarder != nil {
 		caps = append(caps, protocol.CapCore)
 	}
-	if a.cfg.Events != nil {
-		caps = append(caps, protocol.CapEvents)
-	}
-	return caps
+	return append(caps, protocol.CapEvents)
 }
 
 // Name returns the current display name.
@@ -79,7 +87,8 @@ func (a *Agent) TLSConfig() (*tls.Config, error) {
 	return &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}, nil
 }
 
-// Handler returns the gateway's HTTP handler (PROTOCOL.md §8, §9).
+// Handler returns the gateway's HTTP handler (PROTOCOL.md §8, §9). Remote-control
+// endpoints are always routed; unadvertised ones answer not_found after auth.
 func (a *Agent) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/pair", a.handlePair)
@@ -87,14 +96,12 @@ func (a *Agent) Handler() http.Handler {
 	mux.Handle("POST /v1/power", a.auth(a.handlePower))
 	mux.Handle("POST /v1/subscription", a.auth(a.handleSubscription))
 	mux.Handle("POST /v1/rename", a.auth(a.handleRename))
+	mux.Handle("POST /v1/unpair", a.authWith(false, a.handleUnpair))
+	mux.Handle("GET /v1/events", a.auth(a.handleEvents))
+	a.mountRemote(mux)
 	if a.cfg.Forwarder != nil {
 		mux.Handle("/v1/core/", a.auth(func(w http.ResponseWriter, r *http.Request, _ pairing.Entry) {
 			a.cfg.Forwarder.ServeHTTP(w, r)
-		}))
-	}
-	if a.cfg.Events != nil {
-		mux.Handle("/v1/events", a.auth(func(w http.ResponseWriter, r *http.Request, _ pairing.Entry) {
-			a.cfg.Events.ServeHTTP(w, r)
 		}))
 	}
 	return mux
@@ -104,6 +111,12 @@ type authHandler func(w http.ResponseWriter, r *http.Request, e pairing.Entry)
 
 // auth enforces bearer authorization and first-connect confirmation (PROTOCOL.md §5.2, §6.5).
 func (a *Agent) auth(next authHandler) http.Handler {
+	return a.authWith(true, next)
+}
+
+// authWith enforces bearer authorization and, when confirm is set, first-connect
+// confirmation. Unpairing skips confirmation: giving up control never needs approval.
+func (a *Agent) authWith(confirm bool, next authHandler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token, ok := bearer(r)
 		if !ok {
@@ -115,7 +128,7 @@ func (a *Agent) auth(next authHandler) http.Handler {
 			writeError(w, http.StatusUnauthorized, protocol.CodeUnauthorized, "invalid or revoked token")
 			return
 		}
-		if a.cfg.RequireConfirmFirstConnect && !entry.Confirmed {
+		if confirm && a.cfg.RequireConfirmFirstConnect && !entry.Confirmed {
 			if !a.confirm(r.Context(), entry) {
 				writeError(w, http.StatusForbidden, protocol.CodeForbidden, "connection not confirmed on agent")
 				return
@@ -133,20 +146,46 @@ func (a *Agent) confirm(ctx context.Context, e pairing.Entry) bool {
 	return true
 }
 
-func (a *Agent) handleStatus(w http.ResponseWriter, r *http.Request, _ pairing.Entry) {
-	power, err := a.cfg.Hooks.PowerState(r.Context())
+// status builds the GET /v1/status body (PROTOCOL.md §8.1). A failing Summarizer only
+// drops the optional summary; it never fails the status call.
+func (a *Agent) status(ctx context.Context) (protocol.Status, error) {
+	power, err := a.cfg.Hooks.PowerState(ctx)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, protocol.CodeCoreUnavailable, err.Error())
-		return
+		return protocol.Status{}, err
 	}
-	writeJSON(w, http.StatusOK, protocol.Status{
+	st := protocol.Status{
 		ID:           a.cfg.DeviceID,
 		Name:         a.Name(),
 		App:          a.cfg.App,
 		Ver:          protocol.Major,
 		Power:        power,
 		Capabilities: a.Capabilities(),
-	})
+	}
+	if s, ok := a.cfg.Hooks.(Summarizer); ok {
+		if sum, err := s.Summary(ctx); err == nil && sum != (protocol.Summary{}) {
+			st.Summary = &sum
+		}
+	}
+	return st, nil
+}
+
+func (a *Agent) handleStatus(w http.ResponseWriter, r *http.Request, _ pairing.Entry) {
+	st, err := a.status(r.Context())
+	if err != nil {
+		writeError(w, http.StatusBadGateway, protocol.CodeCoreUnavailable, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, st)
+}
+
+// handleUnpair lets a controller revoke its own pairing (PROTOCOL.md §7.4).
+func (a *Agent) handleUnpair(w http.ResponseWriter, _ *http.Request, e pairing.Entry) {
+	if _, err := a.cfg.Store.Revoke(e.DeviceID); err != nil {
+		writeError(w, http.StatusInternalServerError, protocol.CodeInternal, err.Error())
+		return
+	}
+	a.events.dropDevice(e.DeviceID)
+	writeJSON(w, http.StatusOK, protocol.OKResponse{OK: true})
 }
 
 func (a *Agent) handlePower(w http.ResponseWriter, r *http.Request, _ pairing.Entry) {
@@ -165,6 +204,7 @@ func (a *Agent) handlePower(w http.ResponseWriter, r *http.Request, _ pairing.En
 		writeError(w, http.StatusBadGateway, protocol.CodeCoreUnavailable, err.Error())
 		return
 	}
+	a.Notify(protocol.EventStatus)
 	writeJSON(w, http.StatusOK, protocol.PowerResponse{OK: true, Power: state})
 }
 
@@ -181,6 +221,7 @@ func (a *Agent) handleSubscription(w http.ResponseWriter, r *http.Request, _ pai
 		writeError(w, http.StatusBadGateway, protocol.CodeCoreUnavailable, err.Error())
 		return
 	}
+	a.Notify(protocol.ResourceProfiles)
 	writeJSON(w, http.StatusOK, protocol.OKResponse{OK: true})
 }
 
@@ -199,6 +240,7 @@ func (a *Agent) handleRename(w http.ResponseWriter, r *http.Request, _ pairing.E
 	if a.cfg.OnRename != nil {
 		a.cfg.OnRename(req.Name)
 	}
+	a.Notify(protocol.EventStatus)
 	writeJSON(w, http.StatusOK, protocol.RenameResponse{OK: true, Name: req.Name})
 }
 

@@ -151,18 +151,24 @@ func (c *Client) do(ctx context.Context, method, path string, body, out any) err
 		return err
 	}
 	defer resp.Body.Close()
-	data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode/100 != 2 {
-		var e protocol.Error
-		if json.Unmarshal(data, &e) == nil && e.Error.Code != "" {
-			return &APIError{Status: resp.StatusCode, Code: e.Error.Code, Message: e.Error.Message}
-		}
-		return &APIError{Status: resp.StatusCode, Code: protocol.CodeInternal, Message: string(data)}
+		return apiError(resp)
 	}
+	data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if out != nil && len(data) > 0 {
 		return json.Unmarshal(data, out)
 	}
 	return nil
+}
+
+// apiError reads a non-2xx response into an *APIError (PROTOCOL.md §5.5).
+func apiError(resp *http.Response) error {
+	data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	var e protocol.Error
+	if json.Unmarshal(data, &e) == nil && e.Error.Code != "" {
+		return &APIError{Status: resp.StatusCode, Code: e.Error.Code, Message: e.Error.Message}
+	}
+	return &APIError{Status: resp.StatusCode, Code: protocol.CodeInternal, Message: string(data)}
 }
 
 // APIError is a structured gateway error (PROTOCOL.md §5.5).

@@ -17,7 +17,8 @@ no shared code: load the file, run the listed transform, assert the expected out
 | `pairing.json` | §6.1 | For each case: `Encode(fields)` must equal `uri` exactly; `Decode(uri)` must reproduce `fields`; `decodes:false` cases must be rejected. |
 | `canonical_json.json` | §3.4 | Parse `input` as JSON, canonicalize, result must equal `canonical` byte-for-byte. |
 | `discovery_txt.json` | §4.3 | TXT `Encode(fields)` must equal `encoded` (key order `app,id,name,ver,fp`); decode tolerates any order. |
-| `whitelist.json` | §9.1 | `Allowed(method, path)` must equal `allowed` for the core-forward whitelist. |
+| `whitelist.json` | §9.1 | `Allowed(method, path)` must equal `allowed` for the core-forward whitelist, and `allowedReadOnly` in read-only mode. |
+| `control.json` | §7.4, §8, §9.2 | `bodies`: decode `canonical` into the model named by `type`, re-encode canonically, bytes must match (Kotlin: `settings[].value` is bool *or* string). `events`: exact SSE frames of `GET /v1/events` (§9.2) — `frame` must equal `event: <type>\ndata: <data>\n\n` and `data` must round-trip. `errors`: requests the gateway itself must reject with `status`/`code`, against an agent advertising every capability (`full`) or none (`p1`). |
 
 ## How to run them
 
@@ -37,5 +38,5 @@ These are golden files; regenerate only when the protocol encodings change:
 cd ../go && go run ./cmd/genvectors ../vectors
 ```
 
-`fingerprint.json` embeds a fixed certificate DER so its expected `fp` stays stable across
-regenerations. After regenerating, the Go test suite must still pass.
+`fingerprint.json` embeds a fixed certificate DER; the generator reuses the committed one so its
+expected `fp` stays stable across regenerations. After regenerating, the Go test suite must still pass.
