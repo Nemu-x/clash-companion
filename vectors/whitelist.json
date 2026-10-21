@@ -2,84 +2,226 @@
   "cases": [
     {
       "method": "GET",
+      "path": "/version",
+      "allowed": true,
+      "allowedReadOnly": true
+    },
+    {
+      "method": "GET",
       "path": "/configs",
-      "allowed": true
-    },
-    {
-      "method": "PUT",
-      "path": "/configs",
-      "allowed": true
+      "allowed": true,
+      "allowedReadOnly": true
     },
     {
       "method": "GET",
-      "path": "/proxies",
-      "allowed": true
-    },
-    {
-      "method": "GET",
-      "path": "/proxies/Proxy",
-      "allowed": true
-    },
-    {
-      "method": "PUT",
-      "path": "/proxies/GroupA",
-      "allowed": true
-    },
-    {
-      "method": "GET",
-      "path": "/group",
-      "allowed": true
-    },
-    {
-      "method": "PUT",
-      "path": "/group/Auto",
-      "allowed": true
+      "path": "/memory",
+      "allowed": true,
+      "allowedReadOnly": true
     },
     {
       "method": "GET",
       "path": "/traffic",
-      "allowed": true
-    },
-    {
-      "method": "GET",
-      "path": "/connections",
-      "allowed": true
-    },
-    {
-      "method": "GET",
-      "path": "/version",
-      "allowed": true
+      "allowed": true,
+      "allowedReadOnly": true
     },
     {
       "method": "GET",
       "path": "/logs",
-      "allowed": true
-    },
-    {
-      "method": "POST",
-      "path": "/configs",
-      "allowed": false
+      "allowed": true,
+      "allowedReadOnly": true
     },
     {
       "method": "GET",
-      "path": "/upgrade",
-      "allowed": false
+      "path": "/rules",
+      "allowed": true,
+      "allowedReadOnly": true
+    },
+    {
+      "method": "GET",
+      "path": "/proxies",
+      "allowed": true,
+      "allowedReadOnly": true
+    },
+    {
+      "method": "GET",
+      "path": "/proxies/Proxy",
+      "allowed": true,
+      "allowedReadOnly": true
     },
     {
       "method": "PUT",
-      "path": "/upgrade",
-      "allowed": false
+      "path": "/proxies/GroupA",
+      "allowed": true,
+      "allowedReadOnly": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/proxies/Auto",
+      "allowed": true,
+      "allowedReadOnly": false
     },
     {
       "method": "GET",
-      "path": "/configs/../secret",
-      "allowed": false
+      "path": "/proxies/HK-01/delay",
+      "allowed": true,
+      "allowedReadOnly": true
+    },
+    {
+      "method": "GET",
+      "path": "/group",
+      "allowed": true,
+      "allowedReadOnly": true
+    },
+    {
+      "method": "GET",
+      "path": "/group/Auto",
+      "allowed": true,
+      "allowedReadOnly": true
+    },
+    {
+      "method": "GET",
+      "path": "/group/Auto/delay",
+      "allowed": true,
+      "allowedReadOnly": true
+    },
+    {
+      "method": "GET",
+      "path": "/providers/proxies",
+      "allowed": true,
+      "allowedReadOnly": true
+    },
+    {
+      "method": "GET",
+      "path": "/providers/proxies/sub1",
+      "allowed": true,
+      "allowedReadOnly": true
+    },
+    {
+      "method": "PUT",
+      "path": "/providers/proxies/sub1",
+      "allowed": true,
+      "allowedReadOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/providers/proxies/sub1/healthcheck",
+      "allowed": true,
+      "allowedReadOnly": true
+    },
+    {
+      "method": "GET",
+      "path": "/providers/rules",
+      "allowed": true,
+      "allowedReadOnly": true
+    },
+    {
+      "method": "PUT",
+      "path": "/providers/rules/ads",
+      "allowed": true,
+      "allowedReadOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/connections",
+      "allowed": true,
+      "allowedReadOnly": true
     },
     {
       "method": "DELETE",
       "path": "/connections",
-      "allowed": false
+      "allowed": true,
+      "allowedReadOnly": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/connections/abc-123",
+      "allowed": true,
+      "allowedReadOnly": false
+    },
+    {
+      "method": "PUT",
+      "path": "/configs",
+      "allowed": false,
+      "allowedReadOnly": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/configs",
+      "allowed": false,
+      "allowedReadOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/configs",
+      "allowed": false,
+      "allowedReadOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/configs/geo",
+      "allowed": false,
+      "allowedReadOnly": false
+    },
+    {
+      "method": "PUT",
+      "path": "/group/Auto",
+      "allowed": false,
+      "allowedReadOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/upgrade",
+      "allowed": false,
+      "allowedReadOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/upgrade",
+      "allowed": false,
+      "allowedReadOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/restart",
+      "allowed": false,
+      "allowedReadOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/storage/key",
+      "allowed": false,
+      "allowedReadOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/cache/dns/flush",
+      "allowed": false,
+      "allowedReadOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/debug/pprof",
+      "allowed": false,
+      "allowedReadOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/configs/../secret",
+      "allowed": false,
+      "allowedReadOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/proxies/a/b",
+      "allowed": false,
+      "allowedReadOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/proxies//delay",
+      "allowed": false,
+      "allowedReadOnly": false
     }
   ],
-  "note": "Allowed(method, corePath) per PROTOCOL.md §9.1 whitelist; everything else forbidden."
+  "note": "Allowed(method, corePath) per PROTOCOL.md §9.1 whitelist; everything else forbidden. allowedReadOnly = result in read-only mode (whitelisted GET only)."
 }

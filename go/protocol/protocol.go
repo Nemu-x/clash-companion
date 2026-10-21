@@ -14,8 +14,9 @@ const (
 	CapPower        = "power"
 	CapSubscription = "subscription"
 	CapRename       = "rename"
+	CapUnpair       = "unpair" // POST /v1/unpair (§7.4)
 	CapCore         = "core"   // P2: /v1/core/*
-	CapEvents       = "events" // P2: WS /v1/events
+	CapEvents       = "events" // P2: GET /v1/events (§9.2)
 )
 
 // Power states.
@@ -56,6 +57,17 @@ type Status struct {
 	Ver          int      `json:"ver"`
 	Power        string   `json:"power"`
 	Capabilities []string `json:"capabilities"`
+	Summary      *Summary `json:"summary,omitempty"`
+}
+
+// Summary is the optional at-a-glance state in GET /v1/status (PROTOCOL.md §8.1), so a
+// controller's home screen needs one call. Every field is optional and omitted when empty.
+type Summary struct {
+	Mode        string `json:"mode,omitempty"`        // tunnel mode (§8.10)
+	Profile     string `json:"profile,omitempty"`     // active profile display name
+	Proxy       string `json:"proxy,omitempty"`       // node currently carrying traffic, as the app shows it
+	AppVersion  string `json:"appVersion,omitempty"`  // consumer app version
+	CoreVersion string `json:"coreVersion,omitempty"` // core version, e.g. "v1.19.32"
 }
 
 // PowerRequest is the POST /v1/power body (PROTOCOL.md §8.2).

@@ -31,10 +31,11 @@ func main() {
 
 	writeJSON(filepath.Join(out, "ids.json"), idsVectors())
 	writeJSON(filepath.Join(out, "pairing.json"), pairingVectors())
-	writeJSON(filepath.Join(out, "fingerprint.json"), fingerprintVectors())
+	writeJSON(filepath.Join(out, "fingerprint.json"), fingerprintVectors(filepath.Join(out, "fingerprint.json")))
 	writeJSON(filepath.Join(out, "canonical_json.json"), canonicalVectors())
 	writeJSON(filepath.Join(out, "discovery_txt.json"), txtVectors())
 	writeJSON(filepath.Join(out, "whitelist.json"), whitelistVectors())
+	writeJSON(filepath.Join(out, "control.json"), controlVectors())
 
 	fmt.Println("vectors written to", out)
 }
@@ -129,13 +130,26 @@ func mkPair(name string, p pairing.Payload) pairCase {
 
 // --- fingerprint: DER -> lowercasehex(sha256(DER)) (§3.3) ---
 
-func fingerprintVectors() any {
-	id, err := pairing.NewIdentity("clashctl-agent", 10*365*24*time.Hour)
-	must(err)
+// fingerprintVectors keeps the certificate already committed at path so the vector stays
+// stable across regenerations; a fresh one is generated only when none exists.
+func fingerprintVectors(path string) any {
+	var der []byte
+	var prev struct {
+		CertDer string `json:"certDer"`
+	}
+	if b, err := os.ReadFile(path); err == nil && json.Unmarshal(b, &prev) == nil && prev.CertDer != "" {
+		var err error
+		der, err = base64.StdEncoding.DecodeString(prev.CertDer)
+		must(err)
+	} else {
+		id, err := pairing.NewIdentity("clashctl-agent", 10*365*24*time.Hour)
+		must(err)
+		der = id.CertDER
+	}
 	return map[string]any{
 		"note":    "fp = lowercasehex(sha256(DER(leaf cert))) per PROTOCOL.md §3.3",
-		"certDer": base64.StdEncoding.EncodeToString(id.CertDER),
-		"fp":      id.FP,
+		"certDer": base64.StdEncoding.EncodeToString(der),
+		"fp":      pairing.Fingerprint(der),
 	}
 }
 
@@ -193,33 +207,59 @@ func whitelistVectors() any {
 		Method  string `json:"method"`
 		Path    string `json:"path"`
 		Allowed bool   `json:"allowed"`
+		// AllowedReadOnly is the expected result in forwarder read-only mode.
+		AllowedReadOnly bool `json:"allowedReadOnly"`
 	}
 	cases := []c{
-		{"GET", "/configs", true},
-		{"PUT", "/configs", true},
-		{"GET", "/proxies", true},
-		{"GET", "/proxies/Proxy", true},
-		{"PUT", "/proxies/GroupA", true},
-		{"GET", "/group", true},
-		{"PUT", "/group/Auto", true},
-		{"GET", "/traffic", true},
-		{"GET", "/connections", true},
-		{"GET", "/version", true},
-		{"GET", "/logs", true},
-		{"POST", "/configs", false},
-		{"GET", "/upgrade", false},
-		{"PUT", "/upgrade", false},
-		{"GET", "/configs/../secret", false},
-		{"DELETE", "/connections", false},
+		{"GET", "/version", true, true},
+		{"GET", "/configs", true, true},
+		{"GET", "/memory", true, true},
+		{"GET", "/traffic", true, true},
+		{"GET", "/logs", true, true},
+		{"GET", "/rules", true, true},
+		{"GET", "/proxies", true, true},
+		{"GET", "/proxies/Proxy", true, true},
+		{"PUT", "/proxies/GroupA", true, false},
+		{"DELETE", "/proxies/Auto", true, false},
+		{"GET", "/proxies/HK-01/delay", true, true},
+		{"GET", "/group", true, true},
+		{"GET", "/group/Auto", true, true},
+		{"GET", "/group/Auto/delay", true, true},
+		{"GET", "/providers/proxies", true, true},
+		{"GET", "/providers/proxies/sub1", true, true},
+		{"PUT", "/providers/proxies/sub1", true, false},
+		{"GET", "/providers/proxies/sub1/healthcheck", true, true},
+		{"GET", "/providers/rules", true, true},
+		{"PUT", "/providers/rules/ads", true, false},
+		{"GET", "/connections", true, true},
+		{"DELETE", "/connections", true, false},
+		{"DELETE", "/connections/abc-123", true, false},
+		{"PUT", "/configs", false, false},
+		{"PATCH", "/configs", false, false},
+		{"POST", "/configs", false, false},
+		{"POST", "/configs/geo", false, false},
+		{"PUT", "/group/Auto", false, false},
+		{"GET", "/upgrade", false, false},
+		{"POST", "/upgrade", false, false},
+		{"POST", "/restart", false, false},
+		{"GET", "/storage/key", false, false},
+		{"POST", "/cache/dns/flush", false, false},
+		{"GET", "/debug/pprof", false, false},
+		{"GET", "/configs/../secret", false, false},
+		{"GET", "/proxies/a/b", false, false},
+		{"GET", "/proxies//delay", false, false},
 	}
 	// Sanity: ensure the table matches the implementation.
 	for i := range cases {
 		if got := forwarder.Allowed(cases[i].Method, cases[i].Path); got != cases[i].Allowed {
 			panic(fmt.Sprintf("whitelist mismatch for %s %s: impl=%v vector=%v", cases[i].Method, cases[i].Path, got, cases[i].Allowed))
 		}
+		if got := forwarder.AllowedReadOnly(cases[i].Method, cases[i].Path); got != cases[i].AllowedReadOnly {
+			panic(fmt.Sprintf("read-only whitelist mismatch for %s %s: impl=%v vector=%v", cases[i].Method, cases[i].Path, got, cases[i].AllowedReadOnly))
+		}
 	}
 	return map[string]any{
-		"note":  "Allowed(method, corePath) per PROTOCOL.md §9.1 whitelist; everything else forbidden.",
+		"note":  "Allowed(method, corePath) per PROTOCOL.md §9.1 whitelist; everything else forbidden. allowedReadOnly = result in read-only mode (whitelisted GET only).",
 		"cases": cases,
 	}
 }

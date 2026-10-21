@@ -14,9 +14,10 @@ import (
 func TestWhitelistVectors(t *testing.T) {
 	var vec struct {
 		Cases []struct {
-			Method  string `json:"method"`
-			Path    string `json:"path"`
-			Allowed bool   `json:"allowed"`
+			Method          string `json:"method"`
+			Path            string `json:"path"`
+			Allowed         bool   `json:"allowed"`
+			AllowedReadOnly bool   `json:"allowedReadOnly"`
 		} `json:"cases"`
 	}
 	testvectors.Load(t, "whitelist.json", &vec)
@@ -26,6 +27,9 @@ func TestWhitelistVectors(t *testing.T) {
 	for _, c := range vec.Cases {
 		if got := forwarder.Allowed(c.Method, c.Path); got != c.Allowed {
 			t.Errorf("Allowed(%s, %s) = %v, want %v", c.Method, c.Path, got, c.Allowed)
+		}
+		if got := forwarder.AllowedReadOnly(c.Method, c.Path); got != c.AllowedReadOnly {
+			t.Errorf("AllowedReadOnly(%s, %s) = %v, want %v", c.Method, c.Path, got, c.AllowedReadOnly)
 		}
 	}
 }
@@ -69,5 +73,45 @@ func TestForwardAndRefuse(t *testing.T) {
 	}
 	if gotPath != "" {
 		t.Fatal("core must not be contacted for a non-whitelisted call")
+	}
+}
+
+func TestReadOnlyAndConfigInjection(t *testing.T) {
+	var hits int
+	core := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		_, _ = io.WriteString(w, "core-ok")
+	}))
+	defer core.Close()
+
+	full, err := forwarder.New(core.URL, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ro, err := forwarder.New(core.URL, "", forwarder.ReadOnly())
+	if err != nil {
+		t.Fatal(err)
+	}
+	serve := func(f *forwarder.Forwarder, method, path string) int {
+		rec := httptest.NewRecorder()
+		f.ServeHTTP(rec, httptest.NewRequest(method, path, strings.NewReader("{}")))
+		return rec.Code
+	}
+
+	// Config load/patch is never forwarded: it could rebind external-controller onto the LAN.
+	for _, m := range []string{http.MethodPut, http.MethodPatch} {
+		if code := serve(full, m, "/v1/core/configs"); code != http.StatusForbidden {
+			t.Fatalf("%s /configs: got %d, want 403", m, code)
+		}
+	}
+	// Read-only refuses writes but forwards reads.
+	if code := serve(ro, http.MethodPut, "/v1/core/proxies/GroupA"); code != http.StatusForbidden {
+		t.Fatalf("read-only PUT: got %d, want 403", code)
+	}
+	if hits != 0 {
+		t.Fatalf("core contacted %d times for refused calls", hits)
+	}
+	if code := serve(ro, http.MethodGet, "/v1/core/proxies"); code != http.StatusOK || hits != 1 {
+		t.Fatalf("read-only GET: got %d (hits %d)", code, hits)
 	}
 }

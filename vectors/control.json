@@ -1,0 +1,571 @@
+{
+  "bodies": [
+    {
+      "name": "proxies.response",
+      "method": "GET",
+      "path": "/v1/proxies",
+      "capability": "proxies",
+      "direction": "response",
+      "type": "ProxyList",
+      "canonical": "{\"groups\":[{\"fixed\":\"\",\"name\":\"Proxy\",\"nodes\":[{\"delay\":87,\"name\":\"Auto\",\"type\":\"URLTest\"},{\"delay\":112,\"name\":\"🇯🇵 Japan\",\"type\":\"Vless\"},{\"delay\":0,\"name\":\"DIRECT\",\"type\":\"Direct\"}],\"now\":\"🇯🇵 Japan\",\"selectable\":true,\"type\":\"Selector\"},{\"fixed\":\"🇯🇵 Japan\",\"name\":\"Auto\",\"nodes\":[{\"delay\":112,\"name\":\"🇯🇵 Japan\",\"type\":\"Vless\"}],\"now\":\"🇯🇵 Japan\",\"selectable\":true,\"type\":\"URLTest\"},{\"fixed\":\"\",\"name\":\"Balance\",\"nodes\":[],\"now\":\"\",\"selectable\":false,\"type\":\"LoadBalance\"}]}"
+    },
+    {
+      "name": "select.request",
+      "method": "POST",
+      "path": "/v1/proxies/select",
+      "capability": "select",
+      "direction": "request",
+      "type": "SelectRequest",
+      "canonical": "{\"group\":\"Proxy\",\"node\":\"🇯🇵 Japan\"}"
+    },
+    {
+      "name": "select.response",
+      "method": "POST",
+      "path": "/v1/proxies/select",
+      "capability": "select",
+      "direction": "response",
+      "type": "SelectResponse",
+      "canonical": "{\"group\":\"Proxy\",\"now\":\"🇯🇵 Japan\",\"ok\":true}"
+    },
+    {
+      "name": "unfix.request",
+      "method": "POST",
+      "path": "/v1/proxies/unfix",
+      "capability": "unfix",
+      "direction": "request",
+      "type": "UnfixRequest",
+      "canonical": "{\"group\":\"Auto\"}"
+    },
+    {
+      "name": "unfix.response",
+      "method": "POST",
+      "path": "/v1/proxies/unfix",
+      "capability": "unfix",
+      "direction": "response",
+      "type": "SelectResponse",
+      "canonical": "{\"group\":\"Auto\",\"now\":\"HK-01\",\"ok\":true}"
+    },
+    {
+      "name": "delay.request.group",
+      "method": "POST",
+      "path": "/v1/proxies/delay",
+      "capability": "delay",
+      "direction": "request",
+      "type": "DelayRequest",
+      "canonical": "{\"group\":\"Auto\"}"
+    },
+    {
+      "name": "delay.request.node",
+      "method": "POST",
+      "path": "/v1/proxies/delay",
+      "capability": "delay",
+      "direction": "request",
+      "type": "DelayRequest",
+      "canonical": "{\"group\":\"Proxy\",\"node\":\"🇯🇵 Japan\",\"timeout\":3000,\"url\":\"https://cp.cloudflare.com/generate_204\"}"
+    },
+    {
+      "name": "delay.response",
+      "method": "POST",
+      "path": "/v1/proxies/delay",
+      "capability": "delay",
+      "direction": "response",
+      "type": "DelayResponse",
+      "canonical": "{\"delays\":[{\"delay\":64,\"name\":\"HK-01\"},{\"delay\":0,\"name\":\"🇯🇵 Japan\"}],\"ok\":true}"
+    },
+    {
+      "name": "mode.get.response",
+      "method": "GET",
+      "path": "/v1/mode",
+      "capability": "mode",
+      "direction": "response",
+      "type": "ModeState",
+      "canonical": "{\"mode\":\"rule\",\"modes\":[\"rule\",\"global\",\"direct\"]}"
+    },
+    {
+      "name": "mode.set.request",
+      "method": "POST",
+      "path": "/v1/mode",
+      "capability": "mode",
+      "direction": "request",
+      "type": "ModeRequest",
+      "canonical": "{\"mode\":\"global\"}"
+    },
+    {
+      "name": "mode.set.response",
+      "method": "POST",
+      "path": "/v1/mode",
+      "capability": "mode",
+      "direction": "response",
+      "type": "ModeResponse",
+      "canonical": "{\"mode\":\"global\",\"ok\":true}"
+    },
+    {
+      "name": "profiles.response",
+      "method": "GET",
+      "path": "/v1/profiles",
+      "capability": "profiles",
+      "direction": "response",
+      "type": "ProfileList",
+      "canonical": "{\"active\":\"p-1\",\"profiles\":[{\"id\":\"p-1\",\"name\":\"Мой VPN\",\"type\":\"remote\",\"updatedAt\":1792540800,\"usage\":{\"download\":52428800,\"expire\":1798761600,\"total\":107374182400,\"upload\":1048576}},{\"id\":\"p-2\",\"name\":\"local.yaml\",\"type\":\"local\",\"updatedAt\":0}]}"
+    },
+    {
+      "name": "profiles.select.request",
+      "method": "POST",
+      "path": "/v1/profiles/select",
+      "capability": "profiles",
+      "direction": "request",
+      "type": "ProfileRequest",
+      "canonical": "{\"id\":\"p-2\"}"
+    },
+    {
+      "name": "profiles.select.response",
+      "method": "POST",
+      "path": "/v1/profiles/select",
+      "capability": "profiles",
+      "direction": "response",
+      "type": "ProfileSelectResponse",
+      "canonical": "{\"active\":\"p-2\",\"ok\":true}"
+    },
+    {
+      "name": "profiles.update.request.all",
+      "method": "POST",
+      "path": "/v1/profiles/update",
+      "capability": "profile_update",
+      "direction": "request",
+      "type": "ProfileRequest",
+      "canonical": "{}"
+    },
+    {
+      "name": "profiles.delete.request",
+      "method": "POST",
+      "path": "/v1/profiles/delete",
+      "capability": "profile_delete",
+      "direction": "request",
+      "type": "ProfileRequest",
+      "canonical": "{\"id\":\"p-2\"}"
+    },
+    {
+      "name": "ok.response",
+      "method": "POST",
+      "path": "/v1/profiles/update",
+      "capability": "profile_update",
+      "direction": "response",
+      "type": "OKResponse",
+      "canonical": "{\"ok\":true}"
+    },
+    {
+      "name": "providers.response",
+      "method": "GET",
+      "path": "/v1/providers",
+      "capability": "providers",
+      "direction": "response",
+      "type": "ProviderList",
+      "canonical": "{\"providers\":[{\"count\":42,\"kind\":\"proxy\",\"name\":\"sub1\",\"updatedAt\":1792540800,\"usage\":{\"download\":52428800,\"expire\":1798761600,\"total\":107374182400,\"upload\":1048576},\"vehicle\":\"http\"},{\"count\":120345,\"kind\":\"rule\",\"name\":\"ads\",\"updatedAt\":1792454400,\"vehicle\":\"http\"}]}"
+    },
+    {
+      "name": "providers.update.request",
+      "method": "POST",
+      "path": "/v1/providers/update",
+      "capability": "providers",
+      "direction": "request",
+      "type": "ProviderRequest",
+      "canonical": "{\"kind\":\"rule\",\"name\":\"ads\"}"
+    },
+    {
+      "name": "providers.healthcheck.request",
+      "method": "POST",
+      "path": "/v1/providers/healthcheck",
+      "capability": "providers",
+      "direction": "request",
+      "type": "ProviderRequest",
+      "canonical": "{\"kind\":\"proxy\",\"name\":\"sub1\"}"
+    },
+    {
+      "name": "connections.response",
+      "method": "GET",
+      "path": "/v1/connections",
+      "capability": "connections",
+      "direction": "response",
+      "type": "ConnectionList",
+      "canonical": "{\"connections\":[{\"chains\":[\"🇯🇵 Japan\",\"Proxy\"],\"download\":1048576,\"host\":\"www.youtube.com:443\",\"id\":\"1f2e3d4c-0000-4000-8000-000000000001\",\"network\":\"tcp\",\"process\":\"\",\"rule\":\"DomainSuffix(youtube.com)\",\"start\":1792540800123,\"upload\":2048}],\"downloadTotal\":734003200,\"uploadTotal\":1048576}"
+    },
+    {
+      "name": "connections.close.request.one",
+      "method": "POST",
+      "path": "/v1/connections/close",
+      "capability": "connections",
+      "direction": "request",
+      "type": "CloseRequest",
+      "canonical": "{\"id\":\"1f2e3d4c-0000-4000-8000-000000000001\"}"
+    },
+    {
+      "name": "connections.close.request.all",
+      "method": "POST",
+      "path": "/v1/connections/close",
+      "capability": "connections",
+      "direction": "request",
+      "type": "CloseRequest",
+      "canonical": "{}"
+    },
+    {
+      "name": "connections.close.response",
+      "method": "POST",
+      "path": "/v1/connections/close",
+      "capability": "connections",
+      "direction": "response",
+      "type": "CloseResponse",
+      "canonical": "{\"closed\":17,\"ok\":true}"
+    },
+    {
+      "name": "traffic.response",
+      "method": "GET",
+      "path": "/v1/traffic",
+      "capability": "traffic",
+      "direction": "response",
+      "type": "Traffic",
+      "canonical": "{\"down\":3276800,\"downTotal\":734003200,\"up\":12800,\"upTotal\":1048576}"
+    },
+    {
+      "name": "logs.response",
+      "method": "GET",
+      "path": "/v1/logs?level=warning&limit=2",
+      "capability": "logs",
+      "direction": "response",
+      "type": "LogList",
+      "canonical": "{\"lines\":[{\"level\":\"warning\",\"msg\":\"dial HK-01 failed: i/o timeout\",\"time\":1792540800123},{\"level\":\"error\",\"msg\":\"rule-set \\\"ads\\\" update failed\",\"time\":1792540801456}]}"
+    },
+    {
+      "name": "settings.response",
+      "method": "GET",
+      "path": "/v1/settings",
+      "capability": "settings",
+      "direction": "response",
+      "type": "SettingList",
+      "canonical": "{\"settings\":[{\"key\":\"tun\",\"type\":\"bool\",\"value\":true},{\"key\":\"log_level\",\"options\":[\"silent\",\"error\",\"warning\",\"info\",\"debug\"],\"type\":\"enum\",\"value\":\"info\"},{\"key\":\"bypass_lan_apps\",\"label\":\"Обход LAN-приложений\",\"type\":\"bool\",\"value\":false}]}"
+    },
+    {
+      "name": "settings.set.request.bool",
+      "method": "POST",
+      "path": "/v1/settings",
+      "capability": "settings",
+      "direction": "request",
+      "type": "SettingRequest",
+      "canonical": "{\"key\":\"tun\",\"value\":false}"
+    },
+    {
+      "name": "settings.set.request.enum",
+      "method": "POST",
+      "path": "/v1/settings",
+      "capability": "settings",
+      "direction": "request",
+      "type": "SettingRequest",
+      "canonical": "{\"key\":\"log_level\",\"value\":\"debug\"}"
+    },
+    {
+      "name": "settings.set.response",
+      "method": "POST",
+      "path": "/v1/settings",
+      "capability": "settings",
+      "direction": "response",
+      "type": "SettingResponse",
+      "canonical": "{\"ok\":true,\"setting\":{\"key\":\"tun\",\"type\":\"bool\",\"value\":false}}"
+    },
+    {
+      "name": "actions.response",
+      "method": "GET",
+      "path": "/v1/actions",
+      "capability": "actions",
+      "direction": "response",
+      "type": "ActionList",
+      "canonical": "{\"actions\":[{\"id\":\"flush_dns\"},{\"id\":\"update_geo\"},{\"id\":\"clear_cache\",\"label\":\"Очистить кэш\"}]}"
+    },
+    {
+      "name": "actions.run.request",
+      "method": "POST",
+      "path": "/v1/actions",
+      "capability": "actions",
+      "direction": "request",
+      "type": "ActionRequest",
+      "canonical": "{\"action\":\"flush_dns\"}"
+    },
+    {
+      "name": "status.response.summary",
+      "method": "GET",
+      "path": "/v1/status",
+      "capability": "status",
+      "direction": "response",
+      "type": "Status",
+      "canonical": "{\"app\":\"clashfest\",\"capabilities\":[\"status\",\"power\",\"subscription\",\"rename\",\"unpair\",\"proxies\",\"select\",\"mode\",\"events\"],\"id\":\"AAECAwQFBgcICQoLDA0ODw\",\"name\":\"Living Room TV\",\"power\":\"on\",\"summary\":{\"appVersion\":\"2.4.0\",\"coreVersion\":\"v1.19.32\",\"mode\":\"rule\",\"profile\":\"Мой VPN\",\"proxy\":\"🇯🇵 Japan\"},\"ver\":1}"
+    },
+    {
+      "name": "status.response.no_summary",
+      "method": "GET",
+      "path": "/v1/status",
+      "capability": "status",
+      "direction": "response",
+      "type": "Status",
+      "canonical": "{\"app\":\"clashfest\",\"capabilities\":[\"status\",\"power\",\"subscription\",\"rename\"],\"id\":\"AAECAwQFBgcICQoLDA0ODw\",\"name\":\"Living Room TV\",\"power\":\"off\",\"ver\":1}"
+    },
+    {
+      "name": "unpair.response",
+      "method": "POST",
+      "path": "/v1/unpair",
+      "capability": "unpair",
+      "direction": "response",
+      "type": "OKResponse",
+      "canonical": "{\"ok\":true}"
+    },
+    {
+      "name": "events.changed",
+      "method": "GET",
+      "path": "/v1/events",
+      "capability": "events",
+      "direction": "event",
+      "type": "Changed",
+      "canonical": "{\"resource\":\"proxies\"}"
+    }
+  ],
+  "errors": [
+    {
+      "name": "gated.unauthorized_first",
+      "agent": "p1",
+      "auth": false,
+      "method": "GET",
+      "path": "/v1/proxies",
+      "status": 401,
+      "code": "unauthorized"
+    },
+    {
+      "name": "gated.capability_absent",
+      "agent": "p1",
+      "auth": true,
+      "method": "GET",
+      "path": "/v1/proxies",
+      "status": 404,
+      "code": "not_found"
+    },
+    {
+      "name": "gated.capability_absent_post",
+      "agent": "p1",
+      "auth": true,
+      "method": "POST",
+      "path": "/v1/mode",
+      "body": "{\"mode\":\"rule\"}",
+      "status": 404,
+      "code": "not_found"
+    },
+    {
+      "name": "body.invalid_json",
+      "agent": "full",
+      "auth": true,
+      "method": "POST",
+      "path": "/v1/proxies/select",
+      "body": "{\"group\":",
+      "status": 400,
+      "code": "bad_request"
+    },
+    {
+      "name": "select.missing_node",
+      "agent": "full",
+      "auth": true,
+      "method": "POST",
+      "path": "/v1/proxies/select",
+      "body": "{\"group\":\"Proxy\"}",
+      "status": 400,
+      "code": "bad_request"
+    },
+    {
+      "name": "unfix.missing_group",
+      "agent": "full",
+      "auth": true,
+      "method": "POST",
+      "path": "/v1/proxies/unfix",
+      "body": "{}",
+      "status": 400,
+      "code": "bad_request"
+    },
+    {
+      "name": "delay.missing_group",
+      "agent": "full",
+      "auth": true,
+      "method": "POST",
+      "path": "/v1/proxies/delay",
+      "body": "{}",
+      "status": 400,
+      "code": "bad_request"
+    },
+    {
+      "name": "delay.timeout_low",
+      "agent": "full",
+      "auth": true,
+      "method": "POST",
+      "path": "/v1/proxies/delay",
+      "body": "{\"group\":\"Auto\",\"timeout\":99}",
+      "status": 400,
+      "code": "bad_request"
+    },
+    {
+      "name": "delay.timeout_high",
+      "agent": "full",
+      "auth": true,
+      "method": "POST",
+      "path": "/v1/proxies/delay",
+      "body": "{\"group\":\"Auto\",\"timeout\":30001}",
+      "status": 400,
+      "code": "bad_request"
+    },
+    {
+      "name": "delay.url_not_http",
+      "agent": "full",
+      "auth": true,
+      "method": "POST",
+      "path": "/v1/proxies/delay",
+      "body": "{\"group\":\"Auto\",\"url\":\"file:///etc/passwd\"}",
+      "status": 400,
+      "code": "bad_request"
+    },
+    {
+      "name": "mode.invalid",
+      "agent": "full",
+      "auth": true,
+      "method": "POST",
+      "path": "/v1/mode",
+      "body": "{\"mode\":\"Rule\"}",
+      "status": 400,
+      "code": "bad_request"
+    },
+    {
+      "name": "profiles.select.missing_id",
+      "agent": "full",
+      "auth": true,
+      "method": "POST",
+      "path": "/v1/profiles/select",
+      "body": "{}",
+      "status": 400,
+      "code": "bad_request"
+    },
+    {
+      "name": "profiles.delete.missing_id",
+      "agent": "full",
+      "auth": true,
+      "method": "POST",
+      "path": "/v1/profiles/delete",
+      "body": "{}",
+      "status": 400,
+      "code": "bad_request"
+    },
+    {
+      "name": "providers.update.bad_kind",
+      "agent": "full",
+      "auth": true,
+      "method": "POST",
+      "path": "/v1/providers/update",
+      "body": "{\"kind\":\"proxies\",\"name\":\"sub1\"}",
+      "status": 400,
+      "code": "bad_request"
+    },
+    {
+      "name": "providers.healthcheck.rule_kind",
+      "agent": "full",
+      "auth": true,
+      "method": "POST",
+      "path": "/v1/providers/healthcheck",
+      "body": "{\"kind\":\"rule\",\"name\":\"ads\"}",
+      "status": 400,
+      "code": "bad_request"
+    },
+    {
+      "name": "logs.bad_level",
+      "agent": "full",
+      "auth": true,
+      "method": "GET",
+      "path": "/v1/logs?level=trace",
+      "status": 400,
+      "code": "bad_request"
+    },
+    {
+      "name": "logs.limit_zero",
+      "agent": "full",
+      "auth": true,
+      "method": "GET",
+      "path": "/v1/logs?limit=0",
+      "status": 400,
+      "code": "bad_request"
+    },
+    {
+      "name": "logs.limit_high",
+      "agent": "full",
+      "auth": true,
+      "method": "GET",
+      "path": "/v1/logs?limit=1001",
+      "status": 400,
+      "code": "bad_request"
+    },
+    {
+      "name": "settings.missing_key",
+      "agent": "full",
+      "auth": true,
+      "method": "POST",
+      "path": "/v1/settings",
+      "body": "{\"value\":true}",
+      "status": 400,
+      "code": "bad_request"
+    },
+    {
+      "name": "actions.missing_action",
+      "agent": "full",
+      "auth": true,
+      "method": "POST",
+      "path": "/v1/actions",
+      "body": "{}",
+      "status": 400,
+      "code": "bad_request"
+    },
+    {
+      "name": "unpair.unauthorized",
+      "agent": "full",
+      "auth": false,
+      "method": "POST",
+      "path": "/v1/unpair",
+      "body": "{}",
+      "status": 401,
+      "code": "unauthorized"
+    },
+    {
+      "name": "events.unauthorized",
+      "agent": "full",
+      "auth": false,
+      "method": "GET",
+      "path": "/v1/events",
+      "status": 401,
+      "code": "unauthorized"
+    },
+    {
+      "name": "events.bad_level",
+      "agent": "full",
+      "auth": true,
+      "method": "GET",
+      "path": "/v1/events?topics=logs&level=trace",
+      "status": 400,
+      "code": "bad_request"
+    }
+  ],
+  "events": [
+    {
+      "type": "changed",
+      "data": "{\"resource\":\"mode\"}",
+      "frame": "event: changed\ndata: {\"resource\":\"mode\"}\n\n"
+    },
+    {
+      "type": "traffic",
+      "data": "{\"down\":3276800,\"downTotal\":734003200,\"up\":12800,\"upTotal\":1048576}",
+      "frame": "event: traffic\ndata: {\"down\":3276800,\"downTotal\":734003200,\"up\":12800,\"upTotal\":1048576}\n\n"
+    },
+    {
+      "type": "log",
+      "data": "{\"level\":\"error\",\"msg\":\"line1\\nline2 «ü»\",\"time\":1792540800123}",
+      "frame": "event: log\ndata: {\"level\":\"error\",\"msg\":\"line1\\nline2 «ü»\",\"time\":1792540800123}\n\n"
+    }
+  ],
+  "note": "Remote-control bodies per PROTOCOL.md §8.6–§8.19. bodies: decode `canonical` into the named model and re-encode canonically (§3.4); bytes must match. events: exact SSE frames of GET /v1/events (§9.2). errors: requests the gateway itself must reject with `status`/`code`; agent \"full\" advertises every capability, \"p1\" none; auth=false sends no bearer token."
+}

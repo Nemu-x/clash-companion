@@ -22,30 +22,54 @@ type rule struct {
 	path   string // e.g. "/proxies/{}"
 }
 
-// whitelist is the fixed set of forwardable core calls (PROTOCOL.md §9.1).
+// whitelist is the fixed set of forwardable core calls (PROTOCOL.md §9.1). Every entry
+// exists in mihomo's external-controller. Nothing that loads or patches configuration
+// (PUT/PATCH /configs) is listed: a forged config could rebind external-controller onto
+// the LAN and bypass the gateway. Mode and settings go through app capabilities instead.
 var whitelist = []rule{
+	{http.MethodGet, "/version"},
 	{http.MethodGet, "/configs"},
-	{http.MethodPut, "/configs"},
+	{http.MethodGet, "/memory"},
+	{http.MethodGet, "/traffic"},
+	{http.MethodGet, "/logs"},
+	{http.MethodGet, "/rules"},
 	{http.MethodGet, "/proxies"},
 	{http.MethodGet, "/proxies/{}"},
 	{http.MethodPut, "/proxies/{}"},
+	{http.MethodDelete, "/proxies/{}"},
+	{http.MethodGet, "/proxies/{}/delay"},
 	{http.MethodGet, "/group"},
 	{http.MethodGet, "/group/{}"},
-	{http.MethodPut, "/group/{}"},
-	{http.MethodGet, "/traffic"},
+	{http.MethodGet, "/group/{}/delay"},
+	{http.MethodGet, "/providers/proxies"},
+	{http.MethodGet, "/providers/proxies/{}"},
+	{http.MethodPut, "/providers/proxies/{}"},
+	{http.MethodGet, "/providers/proxies/{}/healthcheck"},
+	{http.MethodGet, "/providers/rules"},
+	{http.MethodPut, "/providers/rules/{}"},
 	{http.MethodGet, "/connections"},
-	{http.MethodGet, "/version"},
-	{http.MethodGet, "/logs"},
+	{http.MethodDelete, "/connections"},
+	{http.MethodDelete, "/connections/{}"},
+}
+
+// Option configures a Forwarder.
+type Option func(*Forwarder)
+
+// ReadOnly restricts forwarding to whitelisted GET calls, for consumers whose app owns
+// core state and must apply writes through its own hooks (PROTOCOL.md §9.1).
+func ReadOnly() Option {
+	return func(f *Forwarder) { f.readOnly = true }
 }
 
 // Forwarder relays whitelisted /v1/core/* requests to the localhost core.
 type Forwarder struct {
-	proxy *httputil.ReverseProxy
+	proxy    *httputil.ReverseProxy
+	readOnly bool
 }
 
 // New builds a Forwarder targeting the core at coreURL (e.g. "http://127.0.0.1:9090").
 // An optional secret is sent to the core as its bearer token.
-func New(coreURL, secret string) (*Forwarder, error) {
+func New(coreURL, secret string, opts ...Option) (*Forwarder, error) {
 	target, err := url.Parse(coreURL)
 	if err != nil {
 		return nil, err
@@ -61,16 +85,25 @@ func New(coreURL, secret string) (*Forwarder, error) {
 			r.Header.Set("Authorization", "Bearer "+secret)
 		}
 	}
+	rp.FlushInterval = -1 // /traffic, /logs, /connections stream; relay each chunk at once
 	rp.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, _ error) {
 		writeError(w, http.StatusBadGateway, protocol.CodeCoreUnavailable, "core unavailable")
 	}
-	return &Forwarder{proxy: rp}, nil
+	f := &Forwarder{proxy: rp}
+	for _, o := range opts {
+		o(f)
+	}
+	return f, nil
 }
 
 // ServeHTTP enforces the whitelist then reverse-proxies to the core.
 func (f *Forwarder) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	corePath := strings.TrimPrefix(r.URL.Path, "/v1/core")
-	if !Allowed(r.Method, corePath) {
+	allowed := Allowed
+	if f.readOnly {
+		allowed = AllowedReadOnly
+	}
+	if !allowed(r.Method, corePath) {
 		writeError(w, http.StatusForbidden, protocol.CodeForbidden, "core call not on whitelist")
 		return
 	}
@@ -90,6 +123,12 @@ func Allowed(method, corePath string) bool {
 		}
 	}
 	return false
+}
+
+// AllowedReadOnly reports whether method+corePath is forwarded in read-only mode: a
+// whitelisted GET (PROTOCOL.md §9.1).
+func AllowedReadOnly(method, corePath string) bool {
+	return method == http.MethodGet && Allowed(method, corePath)
 }
 
 func segMatch(pat, got []string) bool {
